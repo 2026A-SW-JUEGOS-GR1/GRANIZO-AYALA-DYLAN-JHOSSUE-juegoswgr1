@@ -1,8 +1,26 @@
 {
-    "last.imagePath": "C:/Users/Usuario/Documents/GitHub/GRANIZO-AYALA-DYLAN-JHOSSUE-juegoswgr1/00-2d",
-    "tileset.embedInMap": true,
-    "tileset.tileSize": {
-        "height": 64,
-        "width": 64
-    }
+    "activeFile": "00-2d/mapa.tmj",
+    "expandedProjectPaths": [
+    ],
+    "fileStates": {
+        "00-2d/mapa.tmj": {
+            "scale": 0.32730468749999997,
+            "selectedLayer": 0,
+            "viewCenter": {
+                "x": 640.0763814297649,
+                "y": 319.2743764172336
+            }
+        },
+        "00-2d/mapa.tmj#background": {
+            "scaleInDock": 1
+        }
+    },
+    "map.lastUsedFormat": "json",
+    "openFiles": [
+        "00-2d/mapa.tmj"
+    ],
+    "project": "00-2d.tiled-project",
+    "recentFiles": [
+        "00-2d/mapa.tmj"
+    ]
 }
