@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>AnaglyphCamera - Efecto 3D Rojo-Cian</title>
+    <style>
+        html, body { overflow: hidden; width: 100%; height: 100%; margin: 0; padding: 0; }
+        #renderCanvas { width: 100%; height: 100%; touch-action: none; }
+        #hint {
+            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+            color: white; font-family: sans-serif; font-size: 16px;
+            background: rgba(0,0,0,0.6); padding: 10px 16px; border-radius: 6px;
+            text-align: center; white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="renderCanvas"></canvas>
+    <div id="hint">🔴🔵 Usá lentes rojo-cian para ver el efecto 3D</div>
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script>
+        const canvas = document.getElementById("renderCanvas");
+        const engine = new BABYLON.Engine(canvas, true);
+
+        const createScene = () => {
+            const scene = new BABYLON.Scene(engine);
+            scene.clearColor = new BABYLON.Color4(0, 0, 0.1, 1);
+
+            // AnaglyphArcRotateCamera: igual que ArcRotateCamera pero con el 5to parámetro = interaxialDistance
+            const camera = new BABYLON.AnaglyphArcRotateCamera("cam", -Math.PI / 2, Math.PI / 3, 15, BABYLON.Vector3.Zero(), 0.033, scene);
+            camera.attachControl(canvas, true);
+            camera.lowerRadiusLimit = 5;
+            camera.upperRadiusLimit = 30;
+
+            const sun = BABYLON.MeshBuilder.CreateSphere("sun", { diameter: 2 }, scene);
+            const sunMat = new BABYLON.StandardMaterial("sunMat", scene);
+            sunMat.emissiveColor = new BABYLON.Color3(1, 0.8, 0);
+            sun.material = sunMat;
+
+            const light = new BABYLON.PointLight("light", BABYLON.Vector3.Zero(), scene);
+            light.intensity = 2;
+
+            const planetsData = [
+                { name: "mercury", radius: 0.4, dist: 4,  color: new BABYLON.Color3(0.7, 0.7, 0.7), speed: 0.02 },
+                { name: "earth",   radius: 0.7, dist: 7,  color: new BABYLON.Color3(0.2, 0.5, 1),   speed: 0.012 },
+                { name: "mars",    radius: 0.5, dist: 10, color: new BABYLON.Color3(0.9, 0.3, 0.1), speed: 0.008 },
+            ];
+
+            const planetMeshes = planetsData.map(p => {
+                const mesh = BABYLON.MeshBuilder.CreateSphere(p.name, { diameter: p.radius * 2 }, scene);
+                const mat = new BABYLON.StandardMaterial(p.name + "Mat", scene);
+                mat.diffuseColor = p.color;
+                mesh.material = mat;
+                return { mesh, dist: p.dist, speed: p.speed, angle: Math.random() * Math.PI * 2 };
+            });
+
+            scene.registerBeforeRender(() => {
+                planetMeshes.forEach(p => {
+                    p.angle += p.speed;
+                    p.mesh.position.x = Math.cos(p.angle) * p.dist;
+                    p.mesh.position.z = Math.sin(p.angle) * p.dist;
+                });
+            });
+
+            return scene;
+        };
+
+        const scene = createScene();
+        engine.runRenderLoop(() => scene.render());
+        window.addEventListener("resize", () => engine.resize());
+    </script>
+</body>
+</html>

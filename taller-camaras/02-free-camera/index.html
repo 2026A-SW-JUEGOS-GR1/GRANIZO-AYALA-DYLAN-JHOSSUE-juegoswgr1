@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>FreeCamera - Exploración de Cuarto</title>
+    <style>
+        html, body { overflow: hidden; width: 100%; height: 100%; margin: 0; padding: 0; }
+        #renderCanvas { width: 100%; height: 100%; touch-action: none; }
+        #hint {
+            position: absolute; top: 10px; left: 10px; color: white;
+            font-family: sans-serif; font-size: 14px;
+            background: rgba(0,0,0,0.5); padding: 8px; border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="renderCanvas"></canvas>
+    <div id="hint">WASD para moverse · Mouse para mirar · Click para activar</div>
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script>
+        const canvas = document.getElementById("renderCanvas");
+        const engine = new BABYLON.Engine(canvas, true);
+
+        const createScene = () => {
+            const scene = new BABYLON.Scene(engine);
+            scene.clearColor = new BABYLON.Color4(0.1, 0.1, 0.15, 1);
+
+            const camera = new BABYLON.FreeCamera("cam", new BABYLON.Vector3(0, 1.8, -8), scene);
+            camera.setTarget(BABYLON.Vector3.Zero());
+            camera.attachControl(canvas, true);
+            camera.speed = 0.3;
+            camera.minZ = 0.1;
+
+            const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+            light.intensity = 0.8;
+            const pointLight = new BABYLON.PointLight("pLight", new BABYLON.Vector3(0, 3, 0), scene);
+            pointLight.intensity = 0.5;
+
+            const ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 12, height: 12 }, scene);
+            const groundMat = new BABYLON.StandardMaterial("groundMat", scene);
+            groundMat.diffuseColor = new BABYLON.Color3(0.4, 0.35, 0.3);
+            ground.material = groundMat;
+
+            const ceiling = BABYLON.MeshBuilder.CreateGround("ceiling", { width: 12, height: 12 }, scene);
+            ceiling.position.y = 4;
+            ceiling.rotation.x = Math.PI;
+            ceiling.material = groundMat;
+
+            const wallMat = new BABYLON.StandardMaterial("wallMat", scene);
+            wallMat.diffuseColor = new BABYLON.Color3(0.8, 0.75, 0.7);
+            wallMat.backFaceCulling = false;
+
+            const wallConfigs = [
+                { pos: new BABYLON.Vector3(0, 2, 6),  rot: new BABYLON.Vector3(0, 0, 0) },
+                { pos: new BABYLON.Vector3(0, 2, -6), rot: new BABYLON.Vector3(0, Math.PI, 0) },
+                { pos: new BABYLON.Vector3(6, 2, 0),  rot: new BABYLON.Vector3(0, -Math.PI / 2, 0) },
+                { pos: new BABYLON.Vector3(-6, 2, 0), rot: new BABYLON.Vector3(0, Math.PI / 2, 0) },
+            ];
+
+            wallConfigs.forEach((cfg, i) => {
+                const wall = BABYLON.MeshBuilder.CreatePlane("wall" + i, { width: 12, height: 4 }, scene);
+                wall.position = cfg.pos;
+                wall.rotation = cfg.rot;
+                wall.material = wallMat;
+            });
+
+            const box = BABYLON.MeshBuilder.CreateBox("box", { size: 1.5 }, scene);
+            box.position = new BABYLON.Vector3(3, 0.75, 3);
+            const boxMat = new BABYLON.StandardMaterial("boxMat", scene);
+            boxMat.diffuseColor = new BABYLON.Color3(0.8, 0.2, 0.2);
+            box.material = boxMat;
+
+            const sphere = BABYLON.MeshBuilder.CreateSphere("sphere", { diameter: 1.2 }, scene);
+            sphere.position = new BABYLON.Vector3(-3, 0.6, 2);
+            const sphereMat = new BABYLON.StandardMaterial("sphereMat", scene);
+            sphereMat.diffuseColor = new BABYLON.Color3(0.2, 0.7, 0.3);
+            sphere.material = sphereMat;
+
+            const cylinder = BABYLON.MeshBuilder.CreateCylinder("cylinder", { height: 2, diameter: 0.8 }, scene);
+            cylinder.position = new BABYLON.Vector3(0, 1, 4);
+            const cylMat = new BABYLON.StandardMaterial("cylMat", scene);
+            cylMat.diffuseColor = new BABYLON.Color3(0.3, 0.3, 0.9);
+            cylinder.material = cylMat;
+
+            return scene;
+        };
+
+        const scene = createScene();
+        engine.runRenderLoop(() => scene.render());
+        window.addEventListener("resize", () => engine.resize());
+    </script>
+</body>
+</html>
