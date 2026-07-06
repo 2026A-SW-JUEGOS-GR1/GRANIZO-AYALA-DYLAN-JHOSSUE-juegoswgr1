@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Taller Casa - Babylon.js</title>
+    <style>
+        html, body { overflow: hidden; width: 100%; height: 100%; margin: 0; padding: 0; }
+        #renderCanvas { width: 100%; height: 100%; touch-action: none; }
+        #hint {
+            position: absolute; top: 10px; left: 10px; color: white;
+            font-family: sans-serif; font-size: 14px;
+            background: rgba(0,0,0,0.5); padding: 8px; border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="renderCanvas"></canvas>
+    <div id="hint">WASD / Flechas: mover y rotar personaje &middot; Mouse: orbitar cámara</div>
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+    <script>
+        const canvas = document.getElementById("renderCanvas");
+        const engine = new BABYLON.Engine(canvas, true);
+
+        const createScene = () => {
+            const scene = new BABYLON.Scene(engine);
+            scene.clearColor = new BABYLON.Color4(0, 0, 0.13, 1);
+            scene.collisionsEnabled = true;
+            scene.gravity = new BABYLON.Vector3(0, -9.81, 0);
+
+            // ===== CAMARA =====
+            const camera = new BABYLON.ArcRotateCamera(
+                "Camara_Principal", -Math.PI / 2, Math.PI / 3, 4,
+                new BABYLON.Vector3(0, 1, 0), scene
+            );
+            camera.attachControl(canvas, true);
+            camera.lowerRadiusLimit = 1.5;
+            camera.upperRadiusLimit = 10;
+            camera.lowerBetaLimit = 0.1;
+            camera.upperBetaLimit = Math.PI / 2.1;
+
+            // ===== LUCES BASE (luna + relleno ambiental) =====
+            const ambient = new BABYLON.HemisphericLight(
+                "Luz_Ambiental", new BABYLON.Vector3(0, 1, 0), scene
+            );
+            ambient.intensity = 0.05;
+
+            const moon = new BABYLON.DirectionalLight(
+                "Luz_Luna", new BABYLON.Vector3(-0.3, -1, -0.5), scene
+            );
+            moon.intensity = 0.25;
+            moon.diffuse = new BABYLON.Color3(0.6, 0.7, 1);
+
+            // ===== CASA =====
+            const box = (name, w, h, d, x, y, z, collides) => {
+                const m = BABYLON.MeshBuilder.CreateBox(name, { width: w, height: h, depth: d }, scene);
+                m.position.set(x, y, z);
+                m.checkCollisions = collides;
+                return m;
+            };
+
+            const wallMeshes = [];
+            const woodFloorMeshes = [];
+            const grassMeshes = [];
+
+            // --- Planta baja: interior (x:[-7,7], z:[-7,3]) ---
+            woodFloorMeshes.push(box("Suelo_PlantaBaja", 14, 0.2, 10, 0, 0, -2, true));
+
+            wallMeshes.push(box("Pared_Norte_Piso1", 14, 3.2, 0.2, 0, 1.6, -7, true));
+            wallMeshes.push(box("Pared_Oeste_Piso1", 0.2, 3.2, 10, -7, 1.6, -2, true));
+            wallMeshes.push(box("Pared_Este_Piso1", 0.2, 3.2, 10, 7, 1.6, -2, true));
+
+            // Divisoria Sala (oeste) / Cocina (este), con hueco de puerta en z:[-1,1]
+            wallMeshes.push(box("Pared_Divisoria1_Norte", 0.2, 3.2, 6, 0, 1.6, -4, true));
+            wallMeshes.push(box("Pared_Divisoria1_Sur", 0.2, 3.2, 2, 0, 1.6, 2, true));
+
+            // --- Escalera: 8 escalones subiendo dentro de la Cocina, junto al muro este ---
+            const stairMeshes = [];
+            for (let i = 0; i < 8; i++) {
+                const z = -6.4 + i * 0.8;
+                const y = 0.2 + i * 0.4;
+                stairMeshes.push(box("Escalon_" + i, 1.2, 0.4, 0.8, 5.6, y, z, true));
+            }
+
+            // Rampa invisible sobre los escalones: el elipsoide del personaje sube
+            // suave por la pendiente en vez de chocar contra cada contrahuella
+            const rampa = BABYLON.MeshBuilder.CreateBox(
+                "Rampa_Escalera", { width: 1.2, height: 0.2, depth: 7.4 }, scene
+            );
+            rampa.position.set(5.6, 1.56, -3.6);
+            rampa.rotation.x = -Math.atan2(3.3, 6.4);
+            rampa.checkCollisions = true;
+            rampa.isVisible = false;
+
+            // --- Entrepiso (techo de planta baja / suelo de planta alta), con hueco para la escalera ---
+            woodFloorMeshes.push(box("Suelo_PlantaAlta_A", 11.8, 0.2, 10, -1.1, 3.2, -2, true));
+            woodFloorMeshes.push(box("Suelo_PlantaAlta_B", 2.2, 0.2, 3.2, 5.9, 3.2, 1.4, true));
+
+            // --- Planta alta: mismos muros exteriores + divisoria Hab1/Hall+Hab2 ---
+            wallMeshes.push(box("Pared_Norte_Piso2", 14, 3.2, 0.2, 0, 4.8, -7, true));
+            wallMeshes.push(box("Pared_Oeste_Piso2", 0.2, 3.2, 10, -7, 4.8, -2, true));
+            wallMeshes.push(box("Pared_Este_Piso2", 0.2, 3.2, 10, 7, 4.8, -2, true));
+            wallMeshes.push(box("Pared_Sur_Piso2", 14, 3.2, 0.2, 0, 4.8, 3, true));
+
+            wallMeshes.push(box("Pared_Divisoria2_Norte", 0.2, 3.2, 6, 0, 4.8, -4, true));
+            wallMeshes.push(box("Pared_Divisoria2_Sur", 0.2, 3.2, 2, 0, 4.8, 2, true));
+
+            // --- Techo ---
+            const roofMesh = box("Techo", 14, 0.2, 10, 0, 6.4, -2, true);
+
+            // --- Patio exterior (x:[-7,7], z:[3,9]), en 4 piezas dejando un hueco 3x3 para la piscina en (3,6) ---
+            grassMeshes.push(box("Suelo_Patio_Norte", 14, 0.2, 1.5, 0, 0, 3.75, true));
+            grassMeshes.push(box("Suelo_Patio_Sur", 14, 0.2, 1.5, 0, 0, 8.25, true));
+            grassMeshes.push(box("Suelo_Patio_Oeste", 8.5, 0.2, 3, -2.75, 0, 6, true));
+            grassMeshes.push(box("Suelo_Patio_Este", 2.5, 0.2, 3, 5.75, 0, 6, true));
+
+            // ===== MATERIALES =====
+            const matPared = new BABYLON.PBRMaterial("mat_pared", scene);
+            matPared.albedoColor = new BABYLON.Color3(0.9, 0.9, 0.85);
+            matPared.roughness = 0.9;
+            wallMeshes.forEach(m => m.material = matPared);
+
+            const matPisoMadera = new BABYLON.PBRMaterial("mat_piso_madera", scene);
+            matPisoMadera.albedoColor = new BABYLON.Color3(0.5, 0.35, 0.2);
+            matPisoMadera.roughness = 0.3;
+            woodFloorMeshes.forEach(m => m.material = matPisoMadera);
+            stairMeshes.forEach(m => m.material = matPisoMadera);
+
+            const matPasto = new BABYLON.PBRMaterial("mat_pasto", scene);
+            matPasto.albedoColor = new BABYLON.Color3(0.25, 0.5, 0.2);
+            matPasto.roughness = 1.0;
+            grassMeshes.forEach(m => m.material = matPasto);
+
+            const matTecho = new BABYLON.PBRMaterial("mat_techo", scene);
+            matTecho.albedoColor = new BABYLON.Color3(0.6, 0.6, 0.6);
+            matTecho.roughness = 0.8;
+            roofMesh.material = matTecho;
+
+            // ===== AGUA =====
+            const poolBasin = BABYLON.MeshBuilder.CreateBox(
+                "Piscina_Base", { width: 3, height: 0.2, depth: 3 }, scene
+            );
+            poolBasin.position.set(3, -0.3, 6);
+            poolBasin.checkCollisions = true;
+            poolBasin.material = matPasto;
+
+            const waterPlane = BABYLON.MeshBuilder.CreateGround(
+                "Piscina_Agua", { width: 3, height: 3 }, scene
+            );
+            waterPlane.position.set(3, -0.1, 6);
+            waterPlane.checkCollisions = false;
+
+            const matAgua = new BABYLON.PBRMaterial("mat_agua", scene);
+            matAgua.albedoColor = new BABYLON.Color3(0.1, 0.4, 0.6);
+            matAgua.alpha = 0.6;
+            matAgua.roughness = 0.05;
+            matAgua.backFaceCulling = false;
+            matAgua.transparencyMode = BABYLON.PBRMaterial.PBRMATERIAL_ALPHABLEND;
+            waterPlane.material = matAgua;
+
+            // ===== FUEGO =====
+            const matLena = new BABYLON.PBRMaterial("mat_lena", scene);
+            matLena.albedoColor = new BABYLON.Color3(0.35, 0.2, 0.1);
+            matLena.roughness = 0.9;
+
+            const fogataX = -3, fogataY = 0.15, fogataZ = 6;
+            for (let i = 0; i < 4; i++) {
+                const log = BABYLON.MeshBuilder.CreateCylinder(
+                    "Lena_" + i, { height: 1.2, diameter: 0.15 }, scene
+                );
+                log.position.set(fogataX, fogataY, fogataZ);
+                log.rotation.z = Math.PI / 2;
+                log.rotation.y = (Math.PI / 4) * i;
+                log.material = matLena;
+            }
+
+            const matFuego = new BABYLON.PBRMaterial("mat_fuego", scene);
+            matFuego.albedoColor = new BABYLON.Color3(1, 0.3, 0);
+            matFuego.emissiveColor = new BABYLON.Color3(1, 0.3, 0);
+            const flame = BABYLON.MeshBuilder.CreateSphere(
+                "Fogata_Llama", { diameter: 0.4 }, scene
+            );
+            flame.position.set(fogataX, fogataY + 0.3, fogataZ);
+            flame.material = matFuego;
+
+            const fireLight = new BABYLON.PointLight(
+                "Luz_Fogata", new BABYLON.Vector3(fogataX, fogataY + 0.3, fogataZ), scene
+            );
+            fireLight.diffuse = new BABYLON.Color3(1, 0.4, 0);
+            fireLight.intensity = 1.5;
+            fireLight.range = 3;
+
+            // ===== DECORACIONES =====
+            const matMueble = new BABYLON.PBRMaterial("mat_mueble", scene);
+            matMueble.albedoColor = new BABYLON.Color3(0.45, 0.3, 0.18);
+            matMueble.roughness = 0.6;
+
+            const matTela = new BABYLON.PBRMaterial("mat_tela", scene);
+            matTela.albedoColor = new BABYLON.Color3(0.55, 0.2, 0.2);
+            matTela.roughness = 0.95;
+
+            const matBlanco = new BABYLON.PBRMaterial("mat_blanco", scene);
+            matBlanco.albedoColor = new BABYLON.Color3(0.85, 0.85, 0.85);
+            matBlanco.roughness = 0.4;
+
+            const matHojas = new BABYLON.PBRMaterial("mat_hojas", scene);
+            matHojas.albedoColor = new BABYLON.Color3(0.2, 0.45, 0.2);
+            matHojas.roughness = 1.0;
+
+            const matCuadro = new BABYLON.PBRMaterial("mat_cuadro", scene);
+            matCuadro.albedoColor = new BABYLON.Color3(0.25, 0.4, 0.65);
+            matCuadro.roughness = 0.5;
+
+            const deco = (mesh, mat) => { mesh.material = mat; return mesh; };
+
+            // --- Sala (planta baja oeste) ---
+            deco(box("Sofa_Asiento", 0.8, 0.45, 2, -6.4, 0.325, -3, true), matTela);
+            deco(box("Sofa_Respaldo", 0.2, 0.7, 2, -6.8, 0.9, -3, true), matTela);
+            deco(box("Mesa_Centro", 1, 0.5, 0.6, -4.8, 0.35, -3, true), matMueble);
+            deco(box("Cuadro_Sala", 0.06, 0.9, 1.3, -0.13, 1.8, -4, false), matCuadro);
+
+            const maceta = BABYLON.MeshBuilder.CreateCylinder(
+                "Planta_Maceta", { height: 0.4, diameter: 0.45 }, scene
+            );
+            maceta.position.set(-6.4, 0.3, -6.4);
+            deco(maceta, matMueble);
+            const hojasPlanta = BABYLON.MeshBuilder.CreateSphere(
+                "Planta_Hojas", { diameter: 0.8 }, scene
+            );
+            hojasPlanta.position.set(-6.4, 0.9, -6.4);
+            deco(hojasPlanta, matHojas);
+
+            // --- Cocina (planta baja este) ---
+            deco(box("Cocina_Meson", 3, 0.9, 0.6, 2.5, 0.55, -6.6, true), matMueble);
+            deco(box("Cocina_Encimera", 3, 0.06, 0.65, 2.5, 1.03, -6.6, false), matBlanco);
+            deco(box("Refrigerador", 0.7, 1.8, 0.7, 0.55, 1.0, -6.55, true), matBlanco);
+            deco(box("Mesa_Comedor_Pata", 0.2, 0.65, 0.2, 2.5, 0.425, -2, true), matMueble);
+            deco(box("Mesa_Comedor_Tabla", 1.4, 0.1, 0.9, 2.5, 0.8, -2, false), matMueble);
+            deco(box("Silla_1", 0.4, 0.45, 0.4, 2.5, 0.325, -1.1, true), matMueble);
+            deco(box("Silla_2", 0.4, 0.45, 0.4, 2.5, 0.325, -2.9, true), matMueble);
+
+            // --- Habitacion 1 (planta alta oeste) ---
+            deco(box("Cama1_Base", 1.4, 0.4, 2, -5.5, 3.5, -5.8, true), matMueble);
+            deco(box("Cama1_Colchon", 1.3, 0.15, 1.9, -5.5, 3.775, -5.8, false), matBlanco);
+            deco(box("Cama1_Almohada", 1.1, 0.12, 0.4, -5.5, 3.91, -6.5, false), matTela);
+            deco(box("Mesa_Noche", 0.5, 0.5, 0.5, -4.2, 3.55, -6.5, true), matMueble);
+            deco(box("Alfombra", 2, 0.02, 1.5, -5, 3.32, -3.5, false), matTela);
+            deco(box("Cuadro_Hab1", 1.2, 0.8, 0.06, -4, 4.9, -6.86, false), matCuadro);
+
+            // --- Habitacion 2 (planta alta este) ---
+            deco(box("Cama2_Base", 1.4, 0.4, 2, 3, 3.5, 1.9, true), matMueble);
+            deco(box("Cama2_Colchon", 1.3, 0.15, 1.9, 3, 3.775, 1.9, false), matBlanco);
+            deco(box("Escritorio", 1.2, 0.75, 0.6, 1, 3.675, -6.55, true), matMueble);
+
+            // --- Patio ---
+            [[-6, 8], [6, 8.2]].forEach(([tx, tz], i) => {
+                const tronco = BABYLON.MeshBuilder.CreateCylinder(
+                    "Arbol_Tronco_" + i, { height: 1.5, diameter: 0.3 }, scene
+                );
+                tronco.position.set(tx, 0.85, tz);
+                tronco.checkCollisions = true;
+                deco(tronco, matMueble);
+                const copa = BABYLON.MeshBuilder.CreateSphere(
+                    "Arbol_Copa_" + i, { diameter: 1.6 }, scene
+                );
+                copa.position.set(tx, 1.9, tz);
+                deco(copa, matHojas);
+            });
+            deco(box("Banca_Fogata_1", 1, 0.35, 0.4, -3, 0.28, 7.3, true), matMueble);
+            deco(box("Banca_Fogata_2", 0.4, 0.35, 1, -4.5, 0.28, 6, true), matMueble);
+
+            // ===== PERSONAJE =====
+            let character = null;
+            let characterAnims = [];
+
+            BABYLON.SceneLoader.ImportMeshAsync(
+                "", "https://assets.babylonjs.com/meshes/", "HVGirl.glb", scene
+            ).then((result) => {
+                character = result.meshes[0];
+                character.name = "Personaje";
+                character.position.set(-3, 0, -5);
+                character.checkCollisions = true;
+                character.ellipsoid = new BABYLON.Vector3(0.5, 1, 0.5);
+                character.ellipsoidOffset = new BABYLON.Vector3(0, 1, 0);
+                character.scaling.scaleInPlace(0.1);
+                character.rotationQuaternion = null;
+
+                characterAnims = result.animationGroups;
+                console.log("Animation groups disponibles:", characterAnims.map(a => a.name));
+
+                const idle = characterAnims.find(a => /idle/i.test(a.name));
+                if (idle) idle.start(true, 1.0, idle.from, idle.to, false);
+            });
+
+            // ===== CONTROLLER =====
+            const inputMap = {};
+            scene.actionManager = new BABYLON.ActionManager(scene);
+            scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+                BABYLON.ActionManager.OnKeyDownTrigger,
+                (evt) => { inputMap[evt.sourceEvent.key.toLowerCase()] = true; }
+            ));
+            scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+                BABYLON.ActionManager.OnKeyUpTrigger,
+                (evt) => { inputMap[evt.sourceEvent.key.toLowerCase()] = false; }
+            ));
+
+            let currentAnim = null;
+            const playAnim = (name) => {
+                if (currentAnim === name) return;
+                characterAnims.forEach(a => a.stop());
+                const group = characterAnims.find(a => new RegExp(name, "i").test(a.name));
+                if (group) group.start(true, 1.0, group.from, group.to, false);
+                currentAnim = name;
+            };
+
+            scene.onBeforeRenderObservable.add(() => {
+                if (!character) return;
+
+                const forward = (inputMap["w"] || inputMap["arrowup"]) ? 1
+                    : (inputMap["s"] || inputMap["arrowdown"]) ? -1 : 0;
+                const turn = (inputMap["a"] || inputMap["arrowleft"]) ? 1
+                    : (inputMap["d"] || inputMap["arrowright"]) ? -1 : 0;
+
+                character.rotation.y += turn * 0.05;
+
+                const speed = 0.1;
+                const dir = character.forward.scale(forward * speed);
+                // Gravedad por frame: -9.81/60 aprox. Con el valor completo por frame
+                // el personaje queda aplastado contra el piso y no puede subir la rampa
+                dir.addInPlace(scene.gravity.scale(0.008 * scene.getAnimationRatio()));
+                character.moveWithCollisions(dir);
+
+                camera.target.set(
+                    character.position.x,
+                    character.position.y + 1,
+                    character.position.z
+                );
+                camera.alpha = Math.atan2(-character.forward.z, -character.forward.x);
+
+                // Camara inteligente: raycast del personaje hacia la camara.
+                // Si una pared/techo se interpone (entorno cerrado), la camara se
+                // acerca hasta quedar delante del obstaculo; en espacio abierto
+                // vuelve suavemente a su distancia normal.
+                const radioNormal = 4;
+                const haciaCamara = camera.position.subtract(camera.target);
+                const rayo = new BABYLON.Ray(
+                    camera.target, haciaCamara.normalize(), radioNormal + 0.5
+                );
+                const obstaculo = scene.pickWithRay(rayo,
+                    (m) => m.checkCollisions && m.isVisible
+                );
+                if (obstaculo && obstaculo.hit) {
+                    camera.radius = Math.max(
+                        obstaculo.distance - 0.3, camera.lowerRadiusLimit
+                    );
+                } else {
+                    camera.radius += (radioNormal - camera.radius) * 0.08;
+                }
+
+                playAnim(forward !== 0 ? "Walking" : "Idle");
+            });
+
+            // ===== LUCES INTERIORES =====
+            const luzSala = new BABYLON.PointLight(
+                "Luz_Sala", new BABYLON.Vector3(-3.5, 2.5, -4), scene
+            );
+            luzSala.diffuse = new BABYLON.Color3(1, 0.9, 0.6);
+            luzSala.intensity = 0.8;
+            luzSala.range = 8;
+
+            const luzHabitacion = new BABYLON.PointLight(
+                "Luz_Habitacion", new BABYLON.Vector3(-3.5, 5.7, -4), scene
+            );
+            luzHabitacion.diffuse = new BABYLON.Color3(1, 0.9, 0.6);
+            luzHabitacion.intensity = 0.8;
+            luzHabitacion.range = 8;
+
+            const luzFachada = new BABYLON.SpotLight(
+                "Luz_Fachada",
+                new BABYLON.Vector3(0, 4, 8),
+                new BABYLON.Vector3(0, -1, -1),
+                0.5, 2,
+                scene
+            );
+            luzFachada.diffuse = new BABYLON.Color3(0.9, 0.95, 1);
+            luzFachada.intensity = 1.2;
+
+            [matPared, matPisoMadera, matPasto, matTecho, matAgua, matLena, matFuego,
+             matMueble, matTela, matBlanco, matHojas, matCuadro].forEach(
+                m => m.maxSimultaneousLights = 8
+            );
+
+            return scene;
+        };
+
+        const scene = createScene();
+        engine.runRenderLoop(() => scene.render());
+        window.addEventListener("resize", () => engine.resize());
+    </script>
+</body>
+</html>
